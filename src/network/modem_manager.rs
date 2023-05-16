@@ -219,6 +219,11 @@ impl Modem {
 			dbus: self.dbus.clone()
 		})
 	}
+
+	/// The modem's ports such as debug, AT and network interfaces
+	pub fn ports(&self) -> Result<Vec<(String, u32)>, Error> {
+		Ok(self.dbus.proxy(&self.path).ports()?)
+	}
 }
 
 pub struct Sim {
