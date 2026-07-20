@@ -203,6 +203,10 @@ impl Modem {
 			.set_current_bands(bands.into_iter().map(|b| *b as u32).collect())
 	}
 
+	pub fn signal_rate(&self) -> Result<u32, Error> {
+		self.dbus.proxy(&self.path).rate()
+	}
+
 	pub fn signal_setup(&self, rate: u32) -> Result<(), Error> {
 		self.dbus.proxy(&self.path).setup(rate)
 	}
