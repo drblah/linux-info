@@ -1,15 +1,14 @@
+use memchr::memmem;
+use simple_bytes::{Bytes, BytesRead, BytesReadRef};
 /// only supports SMBIOS 3.0 see https://www.dmtf.org/sites/default/files/standards/documents/DSP0134_3.4.0.pdf
 ///
 /// only allowed to run on 64bit system with DWORD: u32 & QWORD: u64
 ///
 /// The access method is also only available via
 /// the files /sys/firmware/dmi/tables/{smbios_entry_point, DMI}
-
 use std::fs::{self, File};
 use std::io;
 use std::{iter, str};
-use simple_bytes::{Bytes, BytesRead, BytesReadRef};
-use memchr::memmem;
 use uuid::Uuid;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -26,16 +25,17 @@ pub enum Error {
 	/// Meaning the file DMI could not be found or we don't have enough
 	/// permissions
 	StructuresNotFound,
-	/// 
-	StructuresMalformed
+	///
+	StructuresMalformed,
 }
 
 impl From<Error> for io::Error {
 	fn from(e: Error) -> Self {
 		let kind = match e {
-			Error::EntryPointNotFound |
-			Error::StructuresNotFound => io::ErrorKind::NotFound,
-			_ => io::ErrorKind::Other
+			Error::EntryPointNotFound | Error::StructuresNotFound => {
+				io::ErrorKind::NotFound
+			}
+			_ => io::ErrorKind::Other,
 		};
 		Self::new(kind, format!("{:?}", e))
 	}
@@ -85,7 +85,7 @@ pub struct EntryPoint {
 	/// The 64-bit physical starting address of the read-only SMBIOS
 	/// Structure Table, which can start at any 64-bit address. This area
 	/// contains all of the SMBIOS structures fully packed together.
-	pub table_addr: u64
+	pub table_addr: u64,
 }
 
 macro_rules! structure_kind {
@@ -129,7 +129,7 @@ pub struct StructureHeader {
 	/// Specifies the type of structure. Types 0 through 127 (7Fh) are reserved for and
 	/// defined by this specification. Types 128 through 256 (80h to FFh) are available for
 	/// system- and OEM-specific information.
-	pub kind: StructureKind,// u8
+	pub kind: StructureKind, // u8
 	/// Specifies the length of the formatted area of the structure, starting at the Type field.
 	/// The length of the structure’s string-set is not included.
 	pub len: u8,
@@ -142,7 +142,7 @@ pub struct StructureHeader {
 	/// If the system configuration changes, a previously assigned handle might no longer
 	/// exist. However, after a handle has been assigned by the BIOS, the BIOS cannot
 	/// re-assign that handle number to another structure.
-	pub handle: u16
+	pub handle: u16,
 }
 
 /// Each structure shall be terminated by a double-null (0000h)
@@ -152,7 +152,7 @@ pub struct Structure<'a> {
 	pub header: StructureHeader,
 	pub formatted: &'a [u8],
 	/// strings are separated with \0
-	pub strings: &'a [u8]
+	pub strings: &'a [u8],
 }
 
 const STRUCTURES_PATH: &str = "/sys/firmware/dmi/tables/DMI";
@@ -160,7 +160,7 @@ const STRUCTURES_PATH: &str = "/sys/firmware/dmi/tables/DMI";
 #[derive(Debug, PartialEq, Eq)]
 #[allow(dead_code)]
 pub struct Structures {
-	bytes: Vec<u8>
+	bytes: Vec<u8>,
 }
 
 const BIOS_INFO_MIN_LEN: usize = 1 + 1 + 2 + 1 + 1 + 4 + 0 + 1 + 1 + 1 + 1;
@@ -245,7 +245,7 @@ pub struct BiosInformation<'a> {
 	/// If the system does not have field
 	/// upgradeable embedded controller firmware,
 	/// the value is 0FFh.
-	pub emc_minor: u8
+	pub emc_minor: u8,
 }
 
 const SYSTEM_INFO_MIN_LEN: usize = 1 + 1 + 1 + 1 + 16 + 1 + 1 + 1;
@@ -288,14 +288,12 @@ pub struct SystemInformation {
 	/// different configurations and pricing points.
 	/// Computers in the same family often have
 	/// similar branding and cosmetic features.
-	pub family: u8
+	pub family: u8,
 }
-
 
 impl EntryPoint {
 	/// Only the anchor string is checked
 	pub fn read() -> Result<Self> {
-
 		let mut buf = [0u8; ENTRY_POINT_MIN_LEN];
 		{
 			let mut file = File::open(ENTRY_POINT_PATH)
@@ -308,7 +306,7 @@ impl EntryPoint {
 
 		// let's check if we have the correct version
 		if bytes.read(ANCHOR_STRING.len()) != ANCHOR_STRING {
-			return Err(Error::AnchorStringIncorrect)
+			return Err(Error::AnchorStringIncorrect);
 		}
 
 		Ok(EntryPoint {
@@ -320,7 +318,7 @@ impl EntryPoint {
 			revision: bytes.read_le_u8(),
 			reserved: bytes.read_le_u8(),
 			table_max: bytes.read_le_u32(),
-			table_addr: bytes.read_le_u64()
+			table_addr: bytes.read_le_u64(),
 		})
 	}
 }
@@ -328,38 +326,35 @@ impl EntryPoint {
 impl Structures {
 	/// if table_max === 0 the size of DMI is just used
 	pub fn read(table_max: u32) -> Result<Self> {
-		let buf = fs::read(STRUCTURES_PATH)
-			.map_err(|_| Error::StructuresNotFound)?;
+		let buf =
+			fs::read(STRUCTURES_PATH).map_err(|_| Error::StructuresNotFound)?;
 
 		if table_max != 0 && buf.len() > table_max as usize {
-			return Err(Error::StructuresMalformed)
+			return Err(Error::StructuresMalformed);
 		}
 
 		Ok(Self { bytes: buf })
 	}
 
-	pub fn structures(&self) -> impl Iterator<Item=Structure> {
+	pub fn structures(&self) -> impl Iterator<Item = Structure> {
 		let mut bytes = Bytes::from(self.bytes.as_ref());
-		iter::from_fn(move || {
-			Structure::read(&mut bytes)
-		})
+		iter::from_fn(move || Structure::read(&mut bytes))
 	}
 }
 
 impl<'a> Structure<'a> {
-
 	/// Returns null if there is not enough space
 	/// or not 2 null bytes where found
 	fn read(reader: &mut impl BytesReadRef<'a>) -> Option<Self> {
 		if reader.remaining().len() < STRUCTURE_HEADER_LEN {
-			return None
+			return None;
 		}
 
 		// read header
 		let header = StructureHeader {
 			kind: StructureKind::from_u8(reader.read_le_u8()),
 			len: reader.read_le_u8(),
-			handle: reader.read_le_u16()
+			handle: reader.read_le_u16(),
 		};
 
 		// min STRUCTURE_HEADER_LEN since the len contains the header len
@@ -369,7 +364,7 @@ impl<'a> Structure<'a> {
 
 		// +2 since we need \0\0 to end the structure
 		if reader.remaining_ref().len() < formatted_len + 2 {
-			return None
+			return None;
 		}
 
 		let formatted = reader.read_ref(formatted_len);
@@ -377,14 +372,18 @@ impl<'a> Structure<'a> {
 		let strings = reader.read_ref(end_pos);
 		let _null_null = reader.read(2);
 
-		Some(Structure { header, formatted, strings })
+		Some(Structure {
+			header,
+			formatted,
+			strings,
+		})
 	}
-
 }
 
 impl<'a> Structure<'a> {
 	pub fn get_str(&self, num: u8) -> Option<&'a str> {
-		self.strings.split(|b| *b == 0)
+		self.strings
+			.split(|b| *b == 0)
 			.nth((num.max(1) as usize) - 1)
 			.map(str::from_utf8)?
 			.ok()
@@ -396,8 +395,9 @@ impl<'a> BiosInformation<'a> {
 		debug_assert_eq!(stru.header.kind, StructureKind::BiosInformation);
 		debug_assert_eq!(BIOS_INFO_MIN_LEN + STRUCTURE_HEADER_LEN, 0x12);
 
-		if (stru.header.len as usize) < BIOS_INFO_MIN_LEN + STRUCTURE_HEADER_LEN {
-			return None
+		if (stru.header.len as usize) < BIOS_INFO_MIN_LEN + STRUCTURE_HEADER_LEN
+		{
+			return None;
 		}
 
 		let char_ext_len = stru.header.len - 0x12;
@@ -414,7 +414,7 @@ impl<'a> BiosInformation<'a> {
 			major: bytes.read_le_u8(),
 			minor: bytes.read_le_u8(),
 			emc_major: bytes.read_le_u8(),
-			emc_minor: bytes.read_le_u8()
+			emc_minor: bytes.read_le_u8(),
 		})
 	}
 }
@@ -423,10 +423,10 @@ impl SystemInformation {
 	pub fn from(stru: &Structure) -> Option<Self> {
 		debug_assert_eq!(stru.header.kind, StructureKind::SystemInformation);
 
-		if (stru.header.len as usize) < SYSTEM_INFO_MIN_LEN
-			+ STRUCTURE_HEADER_LEN
+		if (stru.header.len as usize)
+			< SYSTEM_INFO_MIN_LEN + STRUCTURE_HEADER_LEN
 		{
-			return None
+			return None;
 		}
 
 		let mut bytes = Bytes::from(stru.formatted);
@@ -440,11 +440,12 @@ impl SystemInformation {
 				bytes.read_le_u32().to_be(),
 				bytes.read_le_u16().to_be(),
 				bytes.read_le_u16().to_be(),
-				bytes.read(8)
-			).unwrap(),
+				bytes.read(8),
+			)
+			.unwrap(),
 			wake_up_kind: bytes.read_le_u8(),
 			sku_number: bytes.read_le_u8(),
-			family: bytes.read_le_u8()
+			family: bytes.read_le_u8(),
 		})
 	}
 }

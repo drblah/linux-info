@@ -4,5 +4,5 @@
 //! - list open ports
 //! - list network cards
 
-pub mod network_manager;
 pub mod modem_manager;
+pub mod network_manager;

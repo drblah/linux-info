@@ -1,13 +1,14 @@
 //! Produces the same output as df -h.  
-//! List all 
+//! List all
 
-
-use linux_info::storage::{MountPoints, MountPoint};
-
+use linux_info::storage::{MountPoint, MountPoints};
 
 fn main() {
 	let mt = MountPoints::read().expect("could not read /proc/self/mountinfo");
-	println!("{:<15} {:>10} {:>10} {:>10} {}", "Filesystem", "Size", "Used", "Avail", "Mounted on");
+	println!(
+		"{:<15} {:>10} {:>10} {:>10} {}",
+		"Filesystem", "Size", "Used", "Avail", "Mounted on"
+	);
 	for point in mt.points() {
 		let _ = print_point(point);
 	}
@@ -18,7 +19,7 @@ fn print_point(point: MountPoint) -> Option<()> {
 	let stat = point.stats().ok()?;
 
 	if !stat.has_blocks() {
-		return None
+		return None;
 	}
 
 	println!(

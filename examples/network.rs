@@ -1,16 +1,14 @@
 //! Produces a subset from the dmidecode command
-//! List all 
+//! List all
 
 use std::thread;
 use std::time::Duration;
 
 // use linux_info::bios::Bios;
-use linux_info::network::network_manager::{NetworkManager, DeviceState};
 use linux_info::network::modem_manager::ModemManager;
-
+use linux_info::network::network_manager::{DeviceState, NetworkManager};
 
 fn main() {
-
 	let dbus = NetworkManager::connect().unwrap();
 
 	for device in dbus.devices().unwrap() {
@@ -24,8 +22,7 @@ fn main() {
 		}
 
 		if matches!(state, DeviceState::Activated) {
-			let ipv4 = device.ipv4_config().unwrap()
-				.addresses().unwrap();
+			let ipv4 = device.ipv4_config().unwrap().addresses().unwrap();
 			println!("- addresses {:?}", ipv4);
 		}
 	}
@@ -68,10 +65,7 @@ fn main() {
 			preffered_modes.has_5g()
 		);
 
-		println!(
-			"- bands: {:?}",
-			modem.current_bands().unwrap()
-		);
+		println!("- bands: {:?}", modem.current_bands().unwrap());
 
 		modem.signal_setup(10).unwrap();
 		thread::sleep(Duration::from_secs(1));
@@ -100,5 +94,4 @@ fn main() {
 			println!("- nr5g: {:?}", nr5g);
 		}
 	}
-
 }

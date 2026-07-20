@@ -17,24 +17,23 @@ use std::{fs, io};
 /// Read memory information from /proc/meminfo.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Memory {
-	raw: String
+	raw: String,
 }
 
 impl Memory {
-
 	fn path() -> &'static Path {
 		Path::new("/proc/meminfo")
 	}
 
 	#[cfg(test)]
 	fn from_string(raw: String) -> Self {
-		Self {raw}
+		Self { raw }
 	}
 
 	/// Read memory infos from /proc/meminfo.
 	pub fn read() -> io::Result<Self> {
 		Ok(Self {
-			raw: fs::read_to_string(Self::path())?
+			raw: fs::read_to_string(Self::path())?,
 		})
 	}
 
@@ -44,20 +43,18 @@ impl Memory {
 	}
 
 	/// Get all key and values.
-	pub fn values<'a>(&'a self) -> impl Iterator<Item=(&'a str, &'a str)> {
-		self.raw.split('\n')
-			.filter_map(|line| {
-				// TODO: after 1.52 update tot split_once
-				let mut iter = line.splitn(2, ':');
-				let (key, value) = (iter.next()?, iter.next()?);
-				Some((key.trim(), value.trim()))
-			})
+	pub fn values<'a>(&'a self) -> impl Iterator<Item = (&'a str, &'a str)> {
+		self.raw.split('\n').filter_map(|line| {
+			// TODO: after 1.52 update tot split_once
+			let mut iter = line.splitn(2, ':');
+			let (key, value) = (iter.next()?, iter.next()?);
+			Some((key.trim(), value.trim()))
+		})
 	}
 
 	/// get all keys.
-	pub fn keys<'a>(&'a self) -> impl Iterator<Item=&'a str> {
-		self.values()
-			.map(|(k, _)| k)
+	pub fn keys<'a>(&'a self) -> impl Iterator<Item = &'a str> {
+		self.values().map(|(k, _)| k)
 	}
 
 	/// Get value by key.
@@ -68,8 +65,7 @@ impl Memory {
 
 	/// Get size by key.
 	pub fn size_value<'a>(&'a self, key: &str) -> Option<DataSize> {
-		self.value(key)
-			.and_then(DataSize::from_str)
+		self.value(key).and_then(DataSize::from_str)
 	}
 
 	/// Returns the total memory.
@@ -86,7 +82,6 @@ impl Memory {
 	pub fn available_memory(&self) -> Option<DataSize> {
 		self.size_value("MemAvailable")
 	}
-
 }
 
 #[cfg(test)]
@@ -95,7 +90,8 @@ mod tests {
 	use crate::unit::DataSizeUnit;
 
 	fn memory_info() -> Memory {
-		Memory::from_string("\
+		Memory::from_string(
+			"\
 MemTotal:       32853280 kB
 MemFree:          919776 kB
 MemAvailable:   28781828 kB
@@ -147,7 +143,9 @@ Hugetlb:               0 kB
 DirectMap4k:      922564 kB
 DirectMap2M:    10518528 kB
 DirectMap1G:    22020096 kB\
-		".into())
+		"
+			.into(),
+		)
 	}
 
 	#[test]
@@ -156,5 +154,4 @@ DirectMap1G:    22020096 kB\
 		let total_memory = mem_info.total_memory().unwrap();
 		assert_eq!(total_memory.to(&DataSizeUnit::Kb), 32853280.0);
 	}
-
 }

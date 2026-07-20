@@ -2,15 +2,15 @@
 
 use crate::util::read_to_string_mut;
 
-use std::{fs, io};
+use std::ops::Sub;
 use std::path::Path;
 use std::time::Duration;
-use std::ops::Sub;
+use std::{fs, io};
 
 /// Read uptime information from /proc/uptime.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Uptime {
-	raw: String
+	raw: String,
 }
 
 impl Uptime {
@@ -20,13 +20,13 @@ impl Uptime {
 
 	#[cfg(test)]
 	fn from_string(raw: String) -> Self {
-		Self {raw}
+		Self { raw }
 	}
 
 	/// Reads uptime from /proc/uptime.
 	pub fn read() -> io::Result<Self> {
 		Ok(Self {
-			raw: fs::read_to_string(Self::path())?
+			raw: fs::read_to_string(Self::path())?,
 		})
 	}
 
@@ -36,8 +36,9 @@ impl Uptime {
 	}
 
 	/// Main method to get uptime values. Returns every entry.
-	pub fn all_infos<'a>(&'a self) -> impl Iterator<Item=Duration> + 'a {
-		self.raw.split(' ')
+	pub fn all_infos<'a>(&'a self) -> impl Iterator<Item = Duration> + 'a {
+		self.raw
+			.split(' ')
 			.filter_map(|v| v.trim().parse().ok())
 			.map(Duration::from_secs_f64)
 	}
@@ -57,7 +58,7 @@ impl Uptime {
 /// Read the hostname from /proc/sys/kernel/hostname.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hostname {
-	raw: String
+	raw: String,
 }
 
 impl Hostname {
@@ -67,13 +68,13 @@ impl Hostname {
 
 	#[cfg(test)]
 	fn from_string(raw: String) -> Self {
-		Self {raw}
+		Self { raw }
 	}
 
 	/// Reads hostname from /proc/sys/kernel/hostname.
 	pub fn read() -> io::Result<Self> {
 		Ok(Self {
-			raw: fs::read_to_string(Self::path())?
+			raw: fs::read_to_string(Self::path())?,
 		})
 	}
 
@@ -96,7 +97,7 @@ impl Hostname {
 /// Read the hostname from /proc/sys/kernel/osrelease.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OsRelease {
-	raw: String
+	raw: String,
 }
 
 impl OsRelease {
@@ -106,13 +107,13 @@ impl OsRelease {
 
 	#[cfg(test)]
 	fn from_string(raw: String) -> Self {
-		Self {raw}
+		Self { raw }
 	}
 
 	/// Reads hostname from /proc/sys/kernel/osrelease.
 	pub fn read() -> io::Result<Self> {
 		Ok(Self {
-			raw: fs::read_to_string(Self::path())?
+			raw: fs::read_to_string(Self::path())?,
 		})
 	}
 
@@ -135,7 +136,7 @@ impl OsRelease {
 /// Read the load average from /proc/loadavg.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoadAvg {
-	raw: String
+	raw: String,
 }
 
 impl LoadAvg {
@@ -145,13 +146,13 @@ impl LoadAvg {
 
 	#[cfg(test)]
 	fn from_string(raw: String) -> Self {
-		Self {raw}
+		Self { raw }
 	}
 
 	/// Read load average from /proc/loadavg.
 	pub fn read() -> io::Result<Self> {
 		Ok(Self {
-			raw: fs::read_to_string(Self::path())?
+			raw: fs::read_to_string(Self::path())?,
 		})
 	}
 
@@ -161,33 +162,26 @@ impl LoadAvg {
 	}
 
 	/// Get all key and values.
-	pub fn values<'a>(&'a self) -> impl Iterator<Item=&'a str> {
-		self.raw.split(' ')
-			.map(str::trim)
+	pub fn values<'a>(&'a self) -> impl Iterator<Item = &'a str> {
+		self.raw.split(' ').map(str::trim)
 	}
 
 	/// Get the average of jobs in the queue or waiting for disk I/O.  
 	/// The values are averaged over (1 min, 5 min, 15 min).
 	pub fn average(&self) -> Option<(f32, f32, f32)> {
-		let mut vals = self.values()
-			.take(3)
-			.map(|v| v.parse().ok());
+		let mut vals = self.values().take(3).map(|v| v.parse().ok());
 		Some((vals.next()??, vals.next()??, vals.next()??))
 	}
 
 	/// Returns two values (runnable threads, running threads).
 	pub fn threads(&self) -> Option<(usize, usize)> {
-		let mut vals = self.values()
-			.nth(3)?
-			.split('/')
-			.map(|v| v.parse().ok());
+		let mut vals = self.values().nth(3)?.split('/').map(|v| v.parse().ok());
 		Some((vals.next()??, vals.next()??))
 	}
 
 	/// Returns the PID of the most recent process.
 	pub fn newest_pid(&self) -> Option<u32> {
-		self.values().last()?
-			.parse().ok()
+		self.values().last()?.parse().ok()
 	}
 }
 
@@ -206,14 +200,19 @@ pub struct CpuStat {
 	/// irq: servicing interrupts
 	pub irq: usize,
 	/// softirq: servicing softirqs
-	pub softirq: usize
+	pub softirq: usize,
 }
 
 impl CpuStat {
 	// Calculate total time
 	pub fn total_time(&self) -> usize {
-		self.user + self.nice + self.system + self.idle + self.iowait +
-		self.irq + self.softirq
+		self.user
+			+ self.nice
+			+ self.system
+			+ self.idle
+			+ self.iowait
+			+ self.irq
+			+ self.softirq
 	}
 
 	// Calculate total active time (excluding idle and iowait)
@@ -253,7 +252,9 @@ impl Sub for CpuStat {
 
 impl FromIterator<usize> for CpuStat {
 	fn from_iter<T>(iter: T) -> Self
-	where T: IntoIterator<Item = usize> {
+	where
+		T: IntoIterator<Item = usize>,
+	{
 		let mut iter = iter.into_iter();
 
 		Self {
@@ -263,7 +264,7 @@ impl FromIterator<usize> for CpuStat {
 			idle: iter.next().unwrap_or(0),
 			iowait: iter.next().unwrap_or(0),
 			irq: iter.next().unwrap_or(0),
-			softirq: iter.next().unwrap_or(0)
+			softirq: iter.next().unwrap_or(0),
 		}
 	}
 }
@@ -271,7 +272,7 @@ impl FromIterator<usize> for CpuStat {
 /// Read the load average from /proc/loadavg.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Stat {
-	raw: String
+	raw: String,
 }
 
 impl Stat {
@@ -281,13 +282,13 @@ impl Stat {
 
 	#[cfg(test)]
 	fn from_string(raw: String) -> Self {
-		Self {raw}
+		Self { raw }
 	}
 
 	/// Read load average from /proc/loadavg.
 	pub fn read() -> io::Result<Self> {
 		Ok(Self {
-			raw: fs::read_to_string(Self::path())?
+			raw: fs::read_to_string(Self::path())?,
 		})
 	}
 
@@ -297,35 +298,32 @@ impl Stat {
 	}
 
 	/// Get all key and values.
-	pub fn values<'a>(&'a self) -> impl Iterator<Item=(
-		&'a str,
-		impl Iterator<Item=usize> + '_
-	)> {
-		self.raw.trim().lines()
-			.map(str::trim)
-			.filter_map(|s| {
-				let (key, rest) = s.split_once(' ')?;
+	pub fn values<'a>(
+		&'a self,
+	) -> impl Iterator<Item = (&'a str, impl Iterator<Item = usize> + '_)> {
+		self.raw.trim().lines().map(str::trim).filter_map(|s| {
+			let (key, rest) = s.split_once(' ')?;
 
-				Some((key, rest.split(' ').filter_map(|v| v.parse().ok())))
-			})
+			Some((key, rest.split(' ').filter_map(|v| v.parse().ok())))
+		})
 	}
 
 	pub fn cpu(&self) -> Option<CpuStat> {
-		self.values().find(|(k, _)| *k == "cpu")
+		self.values()
+			.find(|(k, _)| *k == "cpu")
 			.map(|(_, v)| v.collect())
 	}
 
 	pub fn cpu_nth(&self, nth: usize) -> Option<CpuStat> {
 		let nk = format!("cpu{}", nth);
-		self.values().find(|(k, _)| *k == nk)
+		self.values()
+			.find(|(k, _)| *k == nk)
 			.map(|(_, v)| v.collect())
 	}
 }
 
-
 // TODO add https://www.idnt.net/en-US/kb/941772
 // /proc/stat
-
 
 #[cfg(test)]
 mod tests {
@@ -359,7 +357,8 @@ mod tests {
 
 	#[test]
 	fn load_avg() {
-		let s = LoadAvg::from_string("13.37 15.82 16.64 14/1444 436826\n".into());
+		let s =
+			LoadAvg::from_string("13.37 15.82 16.64 14/1444 436826\n".into());
 		assert_eq!(s.average().unwrap(), (13.37, 15.82, 16.64));
 		assert_eq!(s.threads().unwrap(), (14, 1444));
 		assert_eq!(s.newest_pid().unwrap(), 436826);
@@ -403,16 +402,18 @@ softirq 1572362 6570 73617 6 106501 103799 0 729 724985 18 556137\n\
 		".into());
 
 		assert!(first.cpu_nth(0).is_some());
-		assert_eq!(first.cpu().unwrap(), CpuStat {
-			user: 47500,
-			nice: 2396,
-			system: 21138,
-			idle: 741776,
-			iowait: 6759,
-			irq: 0,
-			softirq: 516
-		});
-
+		assert_eq!(
+			first.cpu().unwrap(),
+			CpuStat {
+				user: 47500,
+				nice: 2396,
+				system: 21138,
+				idle: 741776,
+				iowait: 6759,
+				irq: 0,
+				softirq: 516
+			}
+		);
 
 		let second = Stat::from_string("\
 cpu  598326 3695 207316 16449301 11326 0 5035 0 0 0

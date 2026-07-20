@@ -8,7 +8,6 @@
 //! `/sys/firmware/dmi/tables/{smbios_entry_point, DMI}` and you need permission
 //! to read them.
 
-
 mod low_level;
 
 use std::io;
@@ -16,13 +15,13 @@ use std::io;
 pub use uuid::Uuid;
 
 use low_level::{
-	EntryPoint, Structures, StructureKind, BiosInformation, SystemInformation
+	BiosInformation, EntryPoint, StructureKind, Structures, SystemInformation,
 };
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Bios {
 	entry_point: EntryPoint,
-	structures: Structures
+	structures: Structures,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -31,7 +30,7 @@ pub struct BiosInfo<'a> {
 	pub version: &'a str,
 	pub release_date: &'a str,
 	pub major: u8,
-	pub minor: u8
+	pub minor: u8,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -43,7 +42,7 @@ pub struct SystemInfo<'a> {
 	/// is exactly 16bytes long
 	pub uuid: Uuid,
 	pub sku_number: &'a str,
-	pub family: &'a str
+	pub family: &'a str,
 }
 
 impl Bios {
@@ -51,12 +50,14 @@ impl Bios {
 		let entry_point = EntryPoint::read()?;
 		Ok(Self {
 			structures: Structures::read(entry_point.table_max)?,
-			entry_point
+			entry_point,
 		})
 	}
 
 	pub fn bios_info(&self) -> Option<BiosInfo> {
-		let stru = self.structures.structures()
+		let stru = self
+			.structures
+			.structures()
 			.find(|s| s.header.kind == StructureKind::BiosInformation)?;
 		let info = BiosInformation::from(&stru)?;
 
@@ -65,12 +66,14 @@ impl Bios {
 			version: stru.get_str(info.version)?,
 			release_date: stru.get_str(info.release_date)?,
 			major: info.major,
-			minor: info.minor
+			minor: info.minor,
 		})
 	}
 
 	pub fn system_info(&self) -> Option<SystemInfo> {
-		let stru = self.structures.structures()
+		let stru = self
+			.structures
+			.structures()
 			.find(|s| s.header.kind == StructureKind::SystemInformation)?;
 		let info = SystemInformation::from(&stru)?;
 
@@ -81,7 +84,7 @@ impl Bios {
 			serial_number: stru.get_str(info.serial_number)?,
 			uuid: info.uuid,
 			sku_number: stru.get_str(info.sku_number)?,
-			family: stru.get_str(info.family)?
+			family: stru.get_str(info.family)?,
 		})
 	}
 }

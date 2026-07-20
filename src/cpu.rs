@@ -25,24 +25,23 @@ use std::{fs, io};
 /// Read cpu information from /proc/cpuinfo.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Cpu {
-	raw: String
+	raw: String,
 }
 
 impl Cpu {
-
 	fn path() -> &'static Path {
 		Path::new("/proc/cpuinfo")
 	}
 
 	#[cfg(test)]
 	fn from_string(raw: String) -> Self {
-		Self {raw}
+		Self { raw }
 	}
 
 	/// Reads cpu infos from /proc/cpuinfo.
 	pub fn read() -> io::Result<Self> {
 		Ok(Self {
-			raw: fs::read_to_string(Self::path())?
+			raw: fs::read_to_string(Self::path())?,
 		})
 	}
 
@@ -52,9 +51,8 @@ impl Cpu {
 	}
 
 	/// Main method to get cpu infos. Returns every entry.
-	pub fn entries<'a>(&'a self) -> impl Iterator<Item=CpuEntry<'a>> {
-		self.raw.split("\n\n")
-			.map(CpuEntry::from_str)
+	pub fn entries<'a>(&'a self) -> impl Iterator<Item = CpuEntry<'a>> {
+		self.raw.split("\n\n").map(CpuEntry::from_str)
 	}
 
 	/// Returns the first entry.
@@ -64,8 +62,7 @@ impl Cpu {
 
 	/// Returns the value of the first.
 	pub fn first_value<'a>(&'a self, key: &str) -> Option<&'a str> {
-		self.first()
-			.and_then(|i| i.value(key))
+		self.first().and_then(|i| i.value(key))
 	}
 
 	/// Returns the unique values to a specific key.
@@ -85,29 +82,26 @@ impl Cpu {
 	pub fn cores(&self) -> usize {
 		self.entries().count()
 	}
-
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CpuEntry<'a> {
-	raw: &'a str
+	raw: &'a str,
 }
 
 impl<'a> CpuEntry<'a> {
-
 	fn from_str(raw: &'a str) -> Self {
-		Self {raw}
+		Self { raw }
 	}
 
 	/// returns every key and valu ein the cpu info
-	pub fn values(&self) -> impl Iterator<Item=Option<(&'a str, &'a str)>> {
-		self.raw.split('\n')
-			.map(|line| {
-				// TODO: after 1.52 update tot split_once
-				let mut iter = line.splitn(2, ':');
-				let (key, value) = (iter.next()?, iter.next()?);
-				Some((key.trim(), value.trim()))
-			})
+	pub fn values(&self) -> impl Iterator<Item = Option<(&'a str, &'a str)>> {
+		self.raw.split('\n').map(|line| {
+			// TODO: after 1.52 update tot split_once
+			let mut iter = line.splitn(2, ':');
+			let (key, value) = (iter.next()?, iter.next()?);
+			Some((key.trim(), value.trim()))
+		})
 	}
 
 	/// get a value to it's corresponding key
@@ -118,12 +112,9 @@ impl<'a> CpuEntry<'a> {
 	}
 
 	/// list all available keys
-	pub fn keys(&self) -> impl Iterator<Item=&'a str> {
-		self.values()
-			.filter_map(|kv| kv)
-			.map(|(k, _)| k)
+	pub fn keys(&self) -> impl Iterator<Item = &'a str> {
+		self.values().filter_map(|kv| kv).map(|(k, _)| k)
 	}
-
 }
 
 #[cfg(test)]
@@ -219,5 +210,4 @@ power management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\
 		let un = cpu_info.unique_values("model name");
 		assert_eq!(un.len(), 1);
 	}
-
 }

@@ -1,14 +1,13 @@
-
-use std::{fmt, io, mem};
-use std::io::Read;
-use std::fs::File;
-use std::path::Path;
+use std::convert::TryInto;
 use std::ffi::CString;
+use std::fs::File;
+use std::io::Read;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::prelude::AsRawFd;
-use std::convert::TryInto;
+use std::path::Path;
+use std::{fmt, io, mem};
 
-use byte_parser::{StrParser, ParseIterator};
+use byte_parser::{ParseIterator, StrParser};
 
 use libc::c_int;
 
@@ -17,36 +16,31 @@ const DEF_PRECISION: usize = 2;
 /// Represents a size, for example `1024 kB`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DataSize {
-	bytes: u128
+	bytes: u128,
 }
 
 impl DataSize {
-
 	// not implemeting FromStr because this is private.
 	pub(crate) fn from_str(s: &str) -> Option<Self> {
 		let mut iter = StrParser::new(s);
 		let float = parse_f64(&mut iter)?;
 		// now we need to parse the unit
-		let unit = iter.record()
-			.consume_to_str()
-			.trim();
+		let unit = iter.record().consume_to_str().trim();
 
 		let unit = DataSizeUnit::from_str(unit)?;
 		Some(Self {
-			bytes: unit.to_byte(float)
+			bytes: unit.to_byte(float),
 		})
 	}
 
 	pub(crate) fn from_size_bytes(bytes: impl TryInto<u128>) -> Option<Self> {
-		bytes.try_into().ok()
-			.map(|bytes| Self {bytes})
+		bytes.try_into().ok().map(|bytes| Self { bytes })
 	}
 
 	/// Convert the data unit into a specific unit.
 	pub fn to(self, unit: &DataSizeUnit) -> f64 {
 		DataSizeUnit::convert(self.bytes, unit)
 	}
-
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,24 +48,23 @@ pub enum DataSizeUnit {
 	/// Byte
 	B,
 	/// Kilobyte
-	Kb,// 1_000
+	Kb, // 1_000
 	/// Megabyte
-	Mb,// 1_000_000
+	Mb, // 1_000_000
 	/// Gigabyte
-	Gb,// 1_000_000_000
+	Gb, // 1_000_000_000
 	/// Terabyte
-	Tb // 1_000_000_000_000
+	Tb, // 1_000_000_000_000
 }
 
 impl DataSizeUnit {
-
 	const fn val(&self) -> u128 {
 		match self {
 			Self::B => 1,
 			Self::Kb => 1_024,
 			Self::Mb => 1_024 * 1_024,
 			Self::Gb => 1_024 * 1_024 * 1_024,
-			Self::Tb => 1_024 * 1_024 * 1_024 * 1_024
+			Self::Tb => 1_024 * 1_024 * 1_024 * 1_024,
 		}
 	}
 
@@ -83,7 +76,7 @@ impl DataSizeUnit {
 			s if eqs(s, "mb") => Self::Mb,
 			s if eqs(s, "gb") => Self::Gb,
 			s if eqs(s, "tb") => Self::Tb,
-			_ => return None
+			_ => return None,
 		})
 	}
 
@@ -98,7 +91,7 @@ impl DataSizeUnit {
 			b if b < Self::Mb.val() => Self::Kb,
 			b if b < Self::Gb.val() => Self::Mb,
 			b if b < Self::Tb.val() => Self::Gb,
-			_ => Self::Tb
+			_ => Self::Tb,
 		}
 	}
 
@@ -112,14 +105,14 @@ impl DataSizeUnit {
 			Self::Kb => "kb",
 			Self::Mb => "mb",
 			Self::Gb => "gb",
-			Self::Tb => "tb"
+			Self::Tb => "tb",
 		}
 	}
 
 	// val needs to be already adjusted to self
 	fn fmt_val(&self, val: f64, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		if val == 0f64 {
-			return write!(f, "{}", val)
+			return write!(f, "{}", val);
 		}
 
 		// calculate the precision we wan't to use
@@ -127,7 +120,6 @@ impl DataSizeUnit {
 		let precision = if fract == 0f64 {
 			0
 		} else {
-
 			let max = f.precision().unwrap_or(DEF_PRECISION);
 
 			if max <= 1 {
@@ -139,7 +131,6 @@ impl DataSizeUnit {
 
 		write!(f, "{:.*} {}", precision, val, self.as_str())
 	}
-
 }
 
 fn calculate_precision(mut fract: f64, max: usize) -> usize {
@@ -176,8 +167,9 @@ impl fmt::Display for DataSize {
 // parses a part of a slice
 // Panics if Iterator contains not valid utf8
 fn parse_f64<'s, I>(iter: &mut I) -> Option<f64>
-where I: ParseIterator<'s> {
-
+where
+	I: ParseIterator<'s>,
+{
 	let mut iter = iter.record();
 
 	// consume first digits
@@ -186,32 +178,29 @@ where I: ParseIterator<'s> {
 		.ok()?;
 
 	// dot
-	let has_dot = iter
-		.next_if(|&b| b == b'.')
-		.is_some();
+	let has_dot = iter.next_if(|&b| b == b'.').is_some();
 
 	if has_dot {
 		// consume next digits
 		iter.consume_while_byte_fn(u8::is_ascii_digit);
 	}
 
-	iter.to_str()
-		.parse().ok()
+	iter.to_str().parse().ok()
 }
 
 /// Clears the string the writes the entire file to the string.  
 /// Does not allocate in advance like std::fs::read_to_string.
-pub fn read_to_string_mut(path: impl AsRef<Path>, s: &mut String) -> io::Result<()> {
+pub fn read_to_string_mut(
+	path: impl AsRef<Path>,
+	s: &mut String,
+) -> io::Result<()> {
 	s.clear();
 	let mut file = File::open(path)?;
-	file.read_to_string(s)
-		.map(|_| ())
+	file.read_to_string(s).map(|_| ())
 }
 
-
 fn cstr(path: impl AsRef<Path>) -> io::Result<CString> {
-	CString::new(path.as_ref().as_os_str().as_bytes())
-		.map_err(From::from)
+	CString::new(path.as_ref().as_os_str().as_bytes()).map_err(From::from)
 }
 
 // see https://man7.org/linux/man-pages/man2/fstatfs.2.html
@@ -223,7 +212,7 @@ pub fn statfs(path: impl AsRef<Path>) -> io::Result<libc::statfs> {
 		match r {
 			0 => Ok(stat.assume_init()),
 			-1 => Err(io::Error::last_os_error()),
-			_ => panic!("unexpected return value from statfs {:?}", r)
+			_ => panic!("unexpected return value from statfs {:?}", r),
 		}
 	}
 }
@@ -232,10 +221,10 @@ pub fn statfs(path: impl AsRef<Path>) -> io::Result<libc::statfs> {
 
 pub fn blkdev_sector_size(fd: impl AsRawFd) -> io::Result<u64> {
 	let s = unsafe {
-		let mut size: c_int = 0;// todo set default to 512
+		let mut size: c_int = 0; // todo set default to 512
 		match blksszget(fd.as_raw_fd(), &mut size) {
 			-1 => return Err(io::Error::last_os_error()),
-			_ => size
+			_ => size,
 		}
 	};
 
@@ -278,7 +267,10 @@ mod tests {
 		let s = DataSize::from_str("2000 Tb").unwrap();
 		assert_eq!(s.to_string(), "2000 tb");
 		// and precision
-		assert_eq!(format!("{:.0}", DataSize::from_str("1.2 kb").unwrap()), "1 kb");
+		assert_eq!(
+			format!("{:.0}", DataSize::from_str("1.2 kb").unwrap()),
+			"1 kb"
+		);
 	}
 
 	#[test]
@@ -296,5 +288,4 @@ mod tests {
 	fn run_statfs() {
 		statfs("/").unwrap();
 	}
-
 }

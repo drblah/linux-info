@@ -1,16 +1,16 @@
 //! Connect to the ModemManager
 
-use std::time::Duration;
 use std::sync::Arc;
+use std::time::Duration;
 
-use dbus::{Error, Path};
-use dbus::blocking::{Connection, Proxy};
+use dbus::arg::{PropMap, RefArg};
 use dbus::blocking::stdintf::org_freedesktop_dbus::ObjectManager;
-use dbus::arg::{RefArg, PropMap};
+use dbus::blocking::{Connection, Proxy};
+use dbus::{Error, Path};
 
 use mmdbus::modem::Modem as ModemAccess;
-use mmdbus::modem_signal::ModemSignal;
 use mmdbus::modem_modem3gpp::ModemModem3gpp;
+use mmdbus::modem_signal::ModemSignal;
 use mmdbus::sim::Sim as SimTrait;
 
 const DBUS_NAME: &str = "org.freedesktop.ModemManager1";
@@ -19,7 +19,7 @@ const TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Clone)]
 struct Dbus {
-	conn: Arc<Connection>
+	conn: Arc<Connection>,
 }
 
 impl Dbus {
@@ -31,7 +31,7 @@ impl Dbus {
 
 	fn proxy<'a, 'b>(
 		&'b self,
-		path: impl Into<Path<'a>>
+		path: impl Into<Path<'a>>,
 	) -> Proxy<'a, &'b Connection> {
 		self.conn.with_proxy(DBUS_NAME, path, TIMEOUT)
 	}
@@ -39,23 +39,21 @@ impl Dbus {
 
 #[derive(Clone)]
 pub struct ModemManager {
-	dbus: Dbus
+	dbus: Dbus,
 }
 
 impl ModemManager {
 	pub fn connect() -> Result<Self, Error> {
-		Dbus::connect()
-			.map(|dbus| Self { dbus })
+		Dbus::connect().map(|dbus| Self { dbus })
 	}
 
 	pub fn modems(&self) -> Result<Vec<Modem>, Error> {
 		let objects = self.dbus.proxy(DBUS_PATH).get_managed_objects()?;
-		let modems = objects.into_iter()
-			.map(|(path, _)| {
-				Modem {
-					dbus: self.dbus.clone(),
-					path
-				}
+		let modems = objects
+			.into_iter()
+			.map(|(path, _)| Modem {
+				dbus: self.dbus.clone(),
+				path,
 			})
 			.collect();
 
@@ -65,7 +63,7 @@ impl ModemManager {
 
 pub struct Modem {
 	dbus: Dbus,
-	path: Path<'static>
+	path: Path<'static>,
 }
 
 impl Modem {
@@ -102,25 +100,26 @@ impl Modem {
 	/// If the device's state cannot be determined, MM_MODEM_STATE_UNKNOWN will
 	/// be reported.
 	pub fn state(&self) -> Result<ModemState, Error> {
-		self.dbus.proxy(&self.path).state()
-			.map(Into::into)
+		self.dbus.proxy(&self.path).state().map(Into::into)
 	}
 
 	/// The current network access technologies used by the device to
 	/// communicate with the network.
 	///
 	/// If the device's access technology cannot be determined, Unknown will be
-	/// reported. 
+	/// reported.
 	pub fn access_techs(&self) -> Result<ModemAccessTechs, Error> {
-		self.dbus.proxy(&self.path).access_technologies()
+		self.dbus
+			.proxy(&self.path)
+			.access_technologies()
 			.map(Into::into)
 	}
-	
+
 	/// Signal quality in percent (0 - 100) of the dominant access technology
 	/// the device is using to communicate with the network. Always 0 for
-	/// POTS devices.  
+	/// POTS devices.
 	/// The additional boolean value indicates if the quality value given was
-	/// recently taken. 
+	/// recently taken.
 	pub fn signal_quality(&self) -> Result<(u32, bool), Error> {
 		self.dbus.proxy(&self.path).signal_quality()
 	}
@@ -133,18 +132,24 @@ impl Modem {
 	///
 	/// The second integer is a single MMModemMode, which specifies the
 	/// preferred access technology, among the ones defined in the allowed
-	/// modes. 
-	pub fn supported_modes(&self) -> Result<Vec<(ModemMode, ModemMode)>, Error> {
-		self.dbus.proxy(&self.path).supported_modes()
+	/// modes.
+	pub fn supported_modes(
+		&self,
+	) -> Result<Vec<(ModemMode, ModemMode)>, Error> {
+		self.dbus
+			.proxy(&self.path)
+			.supported_modes()
 			.map(|v| v.into_iter().map(|(a, b)| (a.into(), b.into())).collect())
 	}
 
 	/// A pair of MMModemMode values, where the first one is a bitmask
 	/// specifying the access technologies (eg 2G/3G/4G) the device is
 	/// currently allowed to use when connecting to a network, and the second
-	/// one is the preferred mode of those specified as allowed. 
+	/// one is the preferred mode of those specified as allowed.
 	pub fn current_modes(&self) -> Result<(ModemMode, ModemMode), Error> {
-		self.dbus.proxy(&self.path).current_modes()
+		self.dbus
+			.proxy(&self.path)
+			.current_modes()
 			.map(|(a, b)| (a.into(), b.into()))
 	}
 
@@ -152,25 +157,27 @@ impl Modem {
 	/// currently allowed to use when connecting to a network.
 	///
 	/// The given combination should be supported by the modem, as specified
-	/// in the "SupportedModes" property. 
+	/// in the "SupportedModes" property.
 	///
 	/// A pair of MMModemMode values, where the first one is a bitmask of
-	/// allowed modes, and the second one the preferred mode, if any. 
+	/// allowed modes, and the second one the preferred mode, if any.
 	pub fn set_current_modes(
 		&self,
-		(allowed, preferred): (ModemMode, ModemMode)
+		(allowed, preferred): (ModemMode, ModemMode),
 	) -> Result<(), Error> {
-		self.dbus.proxy(&self.path).set_current_modes(
-			(allowed.into(), preferred.into())
-		)
+		self.dbus
+			.proxy(&self.path)
+			.set_current_modes((allowed.into(), preferred.into()))
 	}
 
 	///  List of MMModemBand values, specifying the radio frequency and
 	/// technology bands supported by the device.
 	///
-	/// For POTS devices, only the MM_MODEM_BAND_ANY mode will be returned. 
+	/// For POTS devices, only the MM_MODEM_BAND_ANY mode will be returned.
 	pub fn supported_bands(&self) -> Result<Vec<ModemBand>, Error> {
-		self.dbus.proxy(&self.path).supported_bands()
+		self.dbus
+			.proxy(&self.path)
+			.supported_bands()
 			.map(|v| v.into_iter().map(Into::into).collect())
 	}
 
@@ -180,21 +187,20 @@ impl Modem {
 	///
 	/// It must be a subset of "SupportedBands".
 	pub fn current_bands(&self) -> Result<Vec<ModemBand>, Error> {
-		self.dbus.proxy(&self.path).current_bands()
+		self.dbus
+			.proxy(&self.path)
+			.current_bands()
 			.map(|v| v.into_iter().map(Into::into).collect())
 	}
 
 	/// Set the radio frequency and technology bands the device is currently
-	/// allowed to use when connecting to a network. 
+	/// allowed to use when connecting to a network.
 	///
-	/// List of MMModemBand values, to specify the bands to be used. 
-	pub fn set_current_bands(
-		&self,
-		bands: &[ModemBand]
-	) -> Result<(), Error> {
-		self.dbus.proxy(&self.path).set_current_bands(
-			bands.into_iter().map(|b| *b as u32).collect()
-		)
+	/// List of MMModemBand values, to specify the bands to be used.
+	pub fn set_current_bands(&self, bands: &[ModemBand]) -> Result<(), Error> {
+		self.dbus
+			.proxy(&self.path)
+			.set_current_bands(bands.into_iter().map(|b| *b as u32).collect())
 	}
 
 	pub fn signal_setup(&self, rate: u32) -> Result<(), Error> {
@@ -250,7 +256,7 @@ impl Modem {
 	}
 
 	/// The IMEI of the device.
-	/// 
+	///
 	/// ## Note
 	/// This interface will only be available once the modem is ready to be
 	/// registered in the cellular network. 3GPP devices will require a valid
@@ -261,7 +267,7 @@ impl Modem {
 	}
 
 	/// A MMModem3gppRegistrationState value specifying the mobile
-	/// registration status as defined in 3GPP TS 27.007 section 10.1.19. 
+	/// registration status as defined in 3GPP TS 27.007 section 10.1.19.
 	///
 	/// ## Note
 	/// This interface will only be available once the modem is ready to be
@@ -282,7 +288,7 @@ impl Modem {
 	/// If the MCC and MNC are not known or the mobile is not registered
 	/// to a mobile network, this property will be a zero-length (blank)
 	/// string.
-	/// 
+	///
 	/// ## Note
 	/// This interface will only be available once the modem is ready to be
 	/// registered in the cellular network. 3GPP devices will require a valid
@@ -296,7 +302,7 @@ impl Modem {
 	///
 	/// If the operator name is not known or the mobile is not registered to a
 	/// mobile network, this property will be an empty string.
-	/// 
+	///
 	/// ## Note
 	/// This interface will only be available once the modem is ready to be
 	/// registered in the cellular network. 3GPP devices will require a valid
@@ -311,14 +317,14 @@ impl Modem {
 	pub fn sim(&self) -> Result<Sim, Error> {
 		Ok(Sim {
 			path: self.dbus.proxy(&self.path).sim()?,
-			dbus: self.dbus.clone()
+			dbus: self.dbus.clone(),
 		})
 	}
 }
 
 pub struct Sim {
 	dbus: Dbus,
-	path: Path<'static>
+	path: Path<'static>,
 }
 
 impl Sim {
@@ -345,7 +351,6 @@ impl Sim {
 		SimTrait::operator_name(&self.dbus.proxy(&self.path))
 	}
 }
-
 
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -389,7 +394,7 @@ pub enum ModemState {
 	/// do not cause this state to be entered.
 	Connecting = 10,
 	/// One or more packet data bearers is active and connected.
-	Connected = 11
+	Connected = 11,
 }
 
 impl From<i32> for ModemState {
@@ -397,9 +402,7 @@ impl From<i32> for ModemState {
 		if num < -1 || num > 11 {
 			Self::Unknown
 		} else {
-			unsafe {
-				*(&num as *const i32 as *const Self)
-			}
+			unsafe { *(&num as *const i32 as *const Self) }
 		}
 	}
 }
@@ -454,7 +457,7 @@ pub enum ModemAccessTech {
 	/// NB IoT (ETSI 23.401: LTE Category NB1/NB2). Since 1.20.
 	LteNbIoT = 1 << 17,
 	/// Mask specifying all access technologies.
-	Any = u32::MAX
+	Any = u32::MAX,
 }
 
 impl ModemAccessTech {
@@ -477,7 +480,7 @@ impl ModemAccessTech {
 		ModemAccessTech::Lte,
 		ModemAccessTech::T5Gnr,
 		ModemAccessTech::LteCatM,
-		ModemAccessTech::LteNbIoT
+		ModemAccessTech::LteNbIoT,
 	];
 }
 
@@ -496,7 +499,7 @@ impl ModemAccessTechs {
 		self.0 == ModemAccessTech::Any as u32
 	}
 
-	pub fn iter<'a>(&'a self) -> impl Iterator<Item=ModemAccessTech> + 'a {
+	pub fn iter<'a>(&'a self) -> impl Iterator<Item = ModemAccessTech> + 'a {
 		let is_unknown = self.is_unknown();
 		let is_any = self.is_any();
 		let allow_others = !is_unknown && !is_any;
@@ -506,12 +509,12 @@ impl ModemAccessTechs {
 		//
 		// maybe it would be better to move everything to a new struct
 
-		let unknown_iter = is_unknown
-			.then(|| ModemAccessTech::Unknown)
-			.into_iter();
+		let unknown_iter =
+			is_unknown.then(|| ModemAccessTech::Unknown).into_iter();
 		let any_iter = is_any.then(|| ModemAccessTech::Any).into_iter();
 
-		let other_iter = ModemAccessTech::ALL.into_iter()
+		let other_iter = ModemAccessTech::ALL
+			.into_iter()
 			.map(|v| *v)
 			.filter(move |t| allow_others && self.0 & *t as u32 > 0);
 
@@ -664,7 +667,6 @@ macro_rules! modem_band {
 	)
 }
 
-
 modem_band! {
 	Unknown = 0,
 	/* GSM/UMTS bands */
@@ -810,16 +812,14 @@ pub struct SignalCdma {
 	/// The CDMA1x RSSI (Received Signal Strength Indication), in dBm
 	pub rssi: f64,
 	/// The CDMA1x Ec/Io, in dBm
-	pub ecio: f64
+	pub ecio: f64,
 }
 
 impl SignalCdma {
 	fn from_prop_map(prop: PropMap) -> Option<Self> {
 		Some(Self {
-			rssi: prop.get("rssi")?
-				.as_f64()?,
-			ecio: prop.get("ecio")?
-				.as_f64()?
+			rssi: prop.get("rssi")?.as_f64()?,
+			ecio: prop.get("ecio")?.as_f64()?,
 		})
 	}
 }
@@ -838,20 +838,16 @@ pub struct SignalEvdo {
 	/// CDMA EV-DO SINR level, in dB
 	pub sinr: f64,
 	/// The CDMA EV-DO Io, in dBm
-	pub io: f64
+	pub io: f64,
 }
 
 impl SignalEvdo {
 	fn from_prop_map(prop: PropMap) -> Option<Self> {
 		Some(Self {
-			rssi: prop.get("rssi")?
-				.as_f64()?,
-			ecio: prop.get("ecio")?
-				.as_f64()?,
-			sinr: prop.get("sinr")?
-				.as_f64()?,
-			io: prop.get("io")?
-				.as_f64()?
+			rssi: prop.get("rssi")?.as_f64()?,
+			ecio: prop.get("ecio")?.as_f64()?,
+			sinr: prop.get("sinr")?.as_f64()?,
+			io: prop.get("io")?.as_f64()?,
 		})
 	}
 }
@@ -864,14 +860,13 @@ impl SignalEvdo {
 )]
 pub struct SignalGsm {
 	/// The GSM RSSI (Received Signal Strength Indication), in dBm
-	pub rssi: f64
+	pub rssi: f64,
 }
 
 impl SignalGsm {
 	fn from_prop_map(prop: PropMap) -> Option<Self> {
 		Some(Self {
-			rssi: prop.get("rssi")?
-				.as_f64()?
+			rssi: prop.get("rssi")?.as_f64()?,
 		})
 	}
 }
@@ -886,24 +881,20 @@ pub struct SignalUmts {
 	/// The UMTS RSSI (Received Signal Strength Indication), in dBm
 	pub rssi: f64,
 	/// The UMTS RSCP (Received Signal Code Power), in dBm
-	/// 
+	///
 	/// If zero, the value is probably missing
 	pub rscp: f64,
 	/// The UMTS Ec/Io, in dB
-	pub ecio: f64
+	pub ecio: f64,
 }
 
 impl SignalUmts {
 	fn from_prop_map(prop: PropMap) -> Option<Self> {
 		Some(Self {
-			rssi: prop.get("rssi")?
-				.as_f64()?,
+			rssi: prop.get("rssi")?.as_f64()?,
 			// it seems in my tests rscp does not get returned
-			rscp: prop.get("rscp")
-				.and_then(|v| v.as_f64())
-				.unwrap_or(0f64),
-			ecio: prop.get("ecio")?
-				.as_f64()?
+			rscp: prop.get("rscp").and_then(|v| v.as_f64()).unwrap_or(0f64),
+			ecio: prop.get("ecio")?.as_f64()?,
 		})
 	}
 }
@@ -922,20 +913,16 @@ pub struct SignalLte {
 	/// The LTE RSRP (Reference Signal Received Power), in dBm
 	pub rsrp: f64,
 	/// The LTE S/R ratio, in dB
-	pub snr: f64
+	pub snr: f64,
 }
 
 impl SignalLte {
 	fn from_prop_map(prop: PropMap) -> Option<Self> {
 		Some(Self {
-			rssi: prop.get("rssi")?
-				.as_f64()?,
-			rsrq: prop.get("rsrq")?
-				.as_f64()?,
-			rsrp: prop.get("rsrp")?
-				.as_f64()?,
-			snr: prop.get("snr")?
-				.as_f64()?
+			rssi: prop.get("rssi")?.as_f64()?,
+			rsrq: prop.get("rsrq")?.as_f64()?,
+			rsrp: prop.get("rsrp")?.as_f64()?,
+			snr: prop.get("snr")?.as_f64()?,
 		})
 	}
 }
@@ -949,18 +936,15 @@ impl SignalLte {
 pub struct SignalNr5g {
 	pub rsrq: f64,
 	pub rsrp: f64,
-	pub snr: f64
+	pub snr: f64,
 }
 
 impl SignalNr5g {
 	fn from_prop_map(prop: PropMap) -> Option<Self> {
 		Some(Self {
-			rsrq: prop.get("rsrq")?
-				.as_f64()?,
-			rsrp: prop.get("rsrp")?
-				.as_f64()?,
-			snr: prop.get("snr")?
-				.as_f64()?
+			rsrq: prop.get("rsrq")?.as_f64()?,
+			rsrp: prop.get("rsrp")?.as_f64()?,
+			snr: prop.get("snr")?.as_f64()?,
 		})
 	}
 }
@@ -985,17 +969,15 @@ pub enum RegistrationState {
 	/// Unknown registration status.
 	Unknown = 4,
 	/// Registered on a roaming network.
-	Roaming = 5
+	Roaming = 5,
 }
 
 impl From<u32> for RegistrationState {
 	fn from(num: u32) -> Self {
 		if num > 5 {
-		Self::Unknown
+			Self::Unknown
 		} else {
-			unsafe {
-				*(&num as *const u32 as *const Self)
-			}
+			unsafe { *(&num as *const u32 as *const Self) }
 		}
 	}
 }

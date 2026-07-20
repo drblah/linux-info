@@ -1,17 +1,17 @@
 //! Connect to the NetworkManager
 
-use std::time::Duration;
-use std::sync::Arc;
 use std::net::Ipv4Addr;
+use std::sync::Arc;
+use std::time::Duration;
 
-use dbus::{Error, Path};
-use dbus::blocking::{Connection, Proxy};
 use dbus::arg::RefArg;
+use dbus::blocking::{Connection, Proxy};
+use dbus::{Error, Path};
 
-use nmdbus::NetworkManager as DbusNetworkManager;
 use nmdbus::device::Device as DeviceTrait;
 use nmdbus::device_modem::DeviceModem;
 use nmdbus::ip4config::IP4Config;
+use nmdbus::NetworkManager as DbusNetworkManager;
 
 const DBUS_NAME: &str = "org.freedesktop.NetworkManager";
 const DBUS_PATH: &str = "/org/freedesktop/NetworkManager";
@@ -19,7 +19,7 @@ const TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Clone)]
 struct Dbus {
-	conn: Arc<Connection>
+	conn: Arc<Connection>,
 }
 
 impl Dbus {
@@ -31,7 +31,7 @@ impl Dbus {
 
 	fn proxy<'a, 'b>(
 		&'b self,
-		path: impl Into<Path<'a>>
+		path: impl Into<Path<'a>>,
 	) -> Proxy<'a, &'b Connection> {
 		self.conn.with_proxy(DBUS_NAME, path, TIMEOUT)
 	}
@@ -39,23 +39,21 @@ impl Dbus {
 
 #[derive(Clone)]
 pub struct NetworkManager {
-	dbus: Dbus
+	dbus: Dbus,
 }
 
 impl NetworkManager {
 	pub fn connect() -> Result<Self, Error> {
-		Dbus::connect()
-			.map(|dbus| Self { dbus })
+		Dbus::connect().map(|dbus| Self { dbus })
 	}
 
 	pub fn devices(&self) -> Result<Vec<Device>, Error> {
 		let paths = self.dbus.proxy(DBUS_PATH).get_devices()?;
-		let devices = paths.into_iter()
-			.map(|path| {
-				Device {
-					dbus: self.dbus.clone(),
-					path
-				}
+		let devices = paths
+			.into_iter()
+			.map(|path| Device {
+				dbus: self.dbus.clone(),
+				path,
 			})
 			.collect();
 
@@ -65,13 +63,13 @@ impl NetworkManager {
 
 pub struct Device {
 	dbus: Dbus,
-	path: Path<'static>
+	path: Path<'static>,
 }
 
 impl Device {
 	/// The path of the device as exposed by the udev property ID_PATH.  
 	/// Note that non-UTF-8 characters are backslash escaped.
-	/// Use g_strcompress() to obtain the true (non-UTF-8) string. 
+	/// Use g_strcompress() to obtain the true (non-UTF-8) string.
 	pub fn path(&self) -> Result<String, Error> {
 		self.dbus.proxy(&self.path).path()
 	}
@@ -85,30 +83,30 @@ impl Device {
 	}
 
 	/// The driver handling the device. Non-UTF-8 sequences are backslash
-	/// escaped. Use g_strcompress() to revert. 
+	/// escaped. Use g_strcompress() to revert.
 	pub fn driver(&self) -> Result<String, Error> {
 		self.dbus.proxy(&self.path).driver()
 	}
 
-	/// The current state of the device. 
+	/// The current state of the device.
 	pub fn state(&self) -> Result<DeviceState, Error> {
-		DeviceTrait::state(&self.dbus.proxy(&self.path))
-			.map(Into::into)
+		DeviceTrait::state(&self.dbus.proxy(&self.path)).map(Into::into)
 	}
 
 	/// The general type of the network device; ie Ethernet, Wi-Fi, etc.
 	pub fn kind(&self) -> Result<DeviceKind, Error> {
-		self.dbus.proxy(&self.path).device_type()
-			.map(Into::into)
+		self.dbus.proxy(&self.path).device_type().map(Into::into)
 	}
 
 	/// Ipv4 Configuration of the device. Only valid when the device is in
 	/// DeviceState::Activated
 	pub fn ipv4_config(&self) -> Result<Ipv4Config, Error> {
-		self.dbus.proxy(&self.path).ip4_config()
+		self.dbus
+			.proxy(&self.path)
+			.ip4_config()
 			.map(|path| Ipv4Config {
 				dbus: self.dbus.clone(),
-				path
+				path,
 			})
 	}
 
@@ -120,18 +118,16 @@ impl Device {
 
 pub struct Ipv4Config {
 	dbus: Dbus,
-	path: Path<'static>
+	path: Path<'static>,
 }
 
 impl Ipv4Config {
 	pub fn addresses(&self) -> Result<Vec<Ipv4Addr>, Error> {
 		let data = self.dbus.proxy(&self.path).address_data()?;
-		let addrs = data.into_iter()
+		let addrs = data
+			.into_iter()
 			.filter_map(|mut d| d.remove("address"))
-			.filter_map(|addr| {
-				addr.as_str()?
-					.parse().ok()
-			})
+			.filter_map(|addr| addr.as_str()?.parse().ok())
 			.collect();
 
 		Ok(addrs)
@@ -210,7 +206,7 @@ pub enum DeviceKind {
 	/// an 802.11 Wi-Fi P2P device. Since: 1.16.
 	WifiP2p = 30,
 	/// A VRF (Virtual Routing and Forwarding) interface. Since: 1.24.
-	Vrf = 31
+	Vrf = 31,
 }
 
 impl From<u32> for DeviceKind {
@@ -218,9 +214,7 @@ impl From<u32> for DeviceKind {
 		if num > 31 {
 			Self::Unknown
 		} else {
-			unsafe {
-				*(&num as *const u32 as *const Self)
-			}
+			unsafe { *(&num as *const u32 as *const Self) }
 		}
 	}
 }
@@ -276,7 +270,7 @@ pub enum DeviceState {
 	Deactivating = 110,
 	/// the device failed to connect to the requested network and is cleaning
 	/// up the connection request
-	Failed = 120
+	Failed = 120,
 }
 
 impl From<u32> for DeviceState {
@@ -284,9 +278,7 @@ impl From<u32> for DeviceState {
 		if num > 120 || num % 10 != 0 {
 			Self::Unknown
 		} else {
-			unsafe {
-				*(&num as *const u32 as *const Self)
-			}
+			unsafe { *(&num as *const u32 as *const Self) }
 		}
 	}
 }

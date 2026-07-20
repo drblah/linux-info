@@ -1,11 +1,9 @@
 //! Produces a subset from the dmidecode command
-//! List all 
+//! List all
 
 use linux_info::bios::Bios;
 
-
 fn main() {
-
 	let bios = Bios::read().expect("failed to read bios info");
 	let bios_info = bios.bios_info().expect("failed to get bios info");
 	let system_info = bios.system_info().expect("failed to get system info");
@@ -25,5 +23,4 @@ fn main() {
 	println!("\tUUID: {}", system_info.uuid);
 	println!("\tSKU Number: {}", system_info.sku_number);
 	println!("\tFamily: {}", system_info.family);
-
 }
